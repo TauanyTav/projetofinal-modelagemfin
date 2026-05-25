@@ -1,44 +1,470 @@
 """
 Calculadora de Value at Risk (VaR)
 Trabalho Final — Modelagem Aplicada ao Mercado Financeiro
+Design: Dark Financial Dashboard
 """
 
 import streamlit as st
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.gridspec import GridSpec
 import yfinance as yf
 from scipy.stats import norm
 
 # ============================================================
-# CONFIGURAÇÃO DA PÁGINA
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
-    page_title="Calculadora de VaR",
-    page_icon="📊",
-    layout="wide"
+    page_title="VaR Dashboard",
+    page_icon="📉",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-st.title("📊 Calculadora de Value at Risk (VaR)")
-st.markdown("**Trabalho Final — Modelagem Aplicada ao Mercado Financeiro**")
-st.markdown("---")
+# ============================================================
+# CSS CUSTOMIZADO — DARK FINANCIAL THEME
+# ============================================================
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
+/* ── ROOT VARIABLES ── */
+:root {
+    --bg-primary:    #080c14;
+    --bg-secondary:  #0d1420;
+    --bg-card:       #111827;
+    --bg-card-hover: #162032;
+    --border:        #1e2d40;
+    --border-glow:   #1e4976;
+    --accent-blue:   #1d6fa4;
+    --accent-cyan:   #0ea5e9;
+    --accent-green:  #10b981;
+    --accent-red:    #ef4444;
+    --accent-amber:  #f59e0b;
+    --text-primary:  #e2e8f0;
+    --text-secondary:#7e95b0;
+    --text-dim:      #3d5470;
+    --mono:          'IBM Plex Mono', monospace;
+    --sans:          'IBM Plex Sans', sans-serif;
+}
+
+/* ── GLOBAL RESET ── */
+html, body, [class*="css"] {
+    font-family: var(--sans) !important;
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ── HIDE STREAMLIT CHROME ── */
+#MainMenu, footer, header { visibility: hidden; }
+.stDeployButton { display: none; }
+.stDecoration { display: none; }
+div[data-testid="stToolbar"] { display: none; }
+
+/* ── APP BACKGROUND ── */
+.stApp {
+    background: var(--bg-primary) !important;
+    background-image:
+        radial-gradient(ellipse at 10% 0%, rgba(14,165,233,0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 100%, rgba(16,185,129,0.03) 0%, transparent 50%) !important;
+}
+
+/* ── MAIN CONTENT AREA ── */
+.main .block-container {
+    padding: 1.5rem 2rem 3rem !important;
+    max-width: 1600px !important;
+}
+
+/* ── SIDEBAR ── */
+section[data-testid="stSidebar"] {
+    background: var(--bg-secondary) !important;
+    border-right: 1px solid var(--border) !important;
+    padding-top: 0 !important;
+}
+section[data-testid="stSidebar"] > div {
+    padding-top: 1rem !important;
+}
+section[data-testid="stSidebar"] .stMarkdown p {
+    color: var(--text-secondary) !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    font-weight: 500 !important;
+}
+
+/* ── SIDEBAR INPUTS ── */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stSelectbox > div > div {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px !important;
+    font-family: var(--mono) !important;
+    font-size: 0.82rem !important;
+}
+.stTextInput > div > div > input:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: var(--accent-cyan) !important;
+    box-shadow: 0 0 0 2px rgba(14,165,233,0.15) !important;
+}
+.stSelectbox > div > div {
+    background: var(--bg-card) !important;
+}
+[data-baseweb="select"] > div {
+    background: var(--bg-card) !important;
+    border-color: var(--border) !important;
+    color: var(--text-primary) !important;
+}
+[data-baseweb="popover"] {
+    background: var(--bg-card) !important;
+}
+
+/* ── DATE INPUT ── */
+.stDateInput > div > div > input {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important;
+    font-family: var(--mono) !important;
+    border-radius: 6px !important;
+}
+
+/* ── LABELS ── */
+.stTextInput label, .stNumberInput label,
+.stSelectbox label, .stDateInput label,
+.stSlider label {
+    color: var(--text-secondary) !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* ── BUTTON ── */
+.stButton > button {
+    background: linear-gradient(135deg, #0ea5e9 0%, #1d6fa4 100%) !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-family: var(--sans) !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 0.05em !important;
+    padding: 0.6rem 1.5rem !important;
+    width: 100% !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 20px rgba(14,165,233,0.25) !important;
+}
+.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 28px rgba(14,165,233,0.4) !important;
+}
+
+/* ── TABS ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border) !important;
+    gap: 0 !important;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--text-dim) !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    font-family: var(--sans) !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    padding: 0.75rem 1.5rem !important;
+    transition: all 0.2s !important;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--accent-cyan) !important;
+    border-bottom: 2px solid var(--accent-cyan) !important;
+    background: transparent !important;
+}
+.stTabs [data-baseweb="tab-panel"] {
+    padding-top: 1.5rem !important;
+}
+
+/* ── DATAFRAME ── */
+.stDataFrame {
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+iframe[title="st_dataframe"] {
+    border-radius: 8px !important;
+}
+
+/* ── EXPANDER ── */
+.streamlit-expanderHeader {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 6px !important;
+    color: var(--text-primary) !important;
+    font-family: var(--sans) !important;
+    font-size: 0.85rem !important;
+}
+.streamlit-expanderContent {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 6px 6px !important;
+}
+
+/* ── SPINNER ── */
+.stSpinner > div {
+    border-top-color: var(--accent-cyan) !important;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+/* ── METRIC OVERRIDE (hide default) ── */
+[data-testid="stMetric"] { display: none !important; }
+
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================
-# FUNÇÕES BLACK-SCHOLES E GREGAS
+# COMPONENTES HTML CUSTOMIZADOS
+# ============================================================
+
+def render_header():
+    st.markdown("""
+    <div style="
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 1.5rem 0 1.2rem 0;
+        border-bottom: 1px solid #1e2d40;
+        margin-bottom: 1.5rem;
+    ">
+        <div>
+            <div style="
+                font-family: 'IBM Plex Mono', monospace;
+                font-size: 0.65rem;
+                color: #0ea5e9;
+                letter-spacing: 0.25em;
+                text-transform: uppercase;
+                margin-bottom: 0.4rem;
+            ">Modelagem Aplicada ao Mercado Financeiro</div>
+            <h1 style="
+                font-family: 'IBM Plex Sans', sans-serif;
+                font-size: 1.9rem;
+                font-weight: 700;
+                color: #e2e8f0;
+                margin: 0;
+                letter-spacing: -0.02em;
+                line-height: 1.1;
+            ">Value at Risk <span style="color:#0ea5e9;">Dashboard</span></h1>
+        </div>
+        <div style="text-align:right;">
+            <div style="
+                font-family: 'IBM Plex Mono', monospace;
+                font-size: 0.65rem;
+                color: #3d5470;
+                letter-spacing: 0.1em;
+            ">SISTEMA DE GESTÃO DE RISCO</div>
+            <div style="
+                font-family: 'IBM Plex Mono', monospace;
+                font-size: 0.7rem;
+                color: #7e95b0;
+                margin-top: 2px;
+            ">Black-Scholes · Full Valuation · VaR</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def kpi_card(label, value, subtitle="", color="#0ea5e9", icon=""):
+    return f"""
+    <div style="
+        background: #111827;
+        border: 1px solid #1e2d40;
+        border-top: 2px solid {color};
+        border-radius: 8px;
+        padding: 1.1rem 1.2rem;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+    ">
+        <div style="
+            position: absolute; top: 0; right: 0;
+            width: 60px; height: 60px;
+            background: radial-gradient(circle at top right, {color}18, transparent 70%);
+        "></div>
+        <div style="
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.6rem;
+            color: #7e95b0;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        ">{icon} {label}</div>
+        <div style="
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: {color};
+            line-height: 1.1;
+            margin-bottom: 0.25rem;
+        ">{value}</div>
+        <div style="
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 0.68rem;
+            color: #3d5470;
+        ">{subtitle}</div>
+    </div>
+    """
+
+
+def var_card(label, value, pct, color, description):
+    return f"""
+    <div style="
+        background: #111827;
+        border: 1px solid #1e2d40;
+        border-left: 3px solid {color};
+        border-radius: 8px;
+        padding: 1.2rem 1.4rem;
+        height: 100%;
+    ">
+        <div style="
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.58rem;
+            color: #7e95b0;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 0.6rem;
+        ">{label}</div>
+        <div style="
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: {color};
+            margin-bottom: 0.2rem;
+            letter-spacing: -0.02em;
+        ">{value}</div>
+        <div style="
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.6rem;
+        ">
+            <span style="
+                background: {color}22;
+                color: {color};
+                font-family: 'IBM Plex Mono', monospace;
+                font-size: 0.68rem;
+                padding: 1px 7px;
+                border-radius: 3px;
+            ">{pct} do portfólio</span>
+        </div>
+        <div style="
+            font-size: 0.7rem;
+            color: #3d5470;
+            font-family: 'IBM Plex Sans', sans-serif;
+            line-height: 1.4;
+        ">{description}</div>
+    </div>
+    """
+
+
+def section_title(text, sub=""):
+    sub_html = f'<div style="font-size:0.72rem;color:#3d5470;font-family:IBM Plex Mono,monospace;margin-top:2px;">{sub}</div>' if sub else ""
+    return f"""
+    <div style="margin: 1.8rem 0 0.9rem 0;">
+        <div style="
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #7e95b0;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #1e2d40;
+        ">{text}</div>
+        {sub_html}
+    </div>
+    """
+
+
+def sidebar_section(text):
+    st.sidebar.markdown(f"""
+    <div style="
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.58rem;
+        color: #0ea5e9;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        padding: 1rem 0 0.4rem 0;
+        border-top: 1px solid #1e2d40;
+        margin-top: 0.5rem;
+    ">{text}</div>
+    """, unsafe_allow_html=True)
+
+
+# ============================================================
+# MATPLOTLIB THEME
+# ============================================================
+
+def apply_chart_style():
+    plt.rcParams.update({
+        "figure.facecolor":  "#111827",
+        "axes.facecolor":    "#111827",
+        "axes.edgecolor":    "#1e2d40",
+        "axes.labelcolor":   "#7e95b0",
+        "axes.titlecolor":   "#e2e8f0",
+        "axes.titlesize":    11,
+        "axes.labelsize":    9,
+        "axes.titleweight":  "600",
+        "axes.spines.top":   False,
+        "axes.spines.right": False,
+        "axes.grid":         True,
+        "grid.color":        "#1e2d40",
+        "grid.linewidth":    0.6,
+        "grid.alpha":        0.8,
+        "xtick.color":       "#3d5470",
+        "ytick.color":       "#3d5470",
+        "xtick.labelsize":   8,
+        "ytick.labelsize":   8,
+        "legend.facecolor":  "#0d1420",
+        "legend.edgecolor":  "#1e2d40",
+        "legend.fontsize":   8,
+        "legend.labelcolor": "#7e95b0",
+        "text.color":        "#e2e8f0",
+        "font.family":       "monospace",
+        "figure.dpi":        130,
+    })
+
+
+# ============================================================
+# FUNÇÕES BLACK-SCHOLES
 # ============================================================
 
 def black_scholes(S, K, T, r, sigma, tipo="call"):
     if T <= 0:
         return max(S - K, 0) if tipo == "call" else max(K - S, 0)
     if sigma <= 0:
-        return max(S - K * np.exp(-r * T), 0) if tipo == "call" else max(K * np.exp(-r * T) - S, 0)
+        return (max(S - K * np.exp(-r * T), 0) if tipo == "call"
+                else max(K * np.exp(-r * T) - S, 0))
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
     if tipo == "call":
         return S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
-    else:
-        return K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+    return K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+
 
 def delta_bs(S, K, T, r, sigma, tipo="call"):
     if T <= 0 or sigma <= 0:
@@ -46,11 +472,13 @@ def delta_bs(S, K, T, r, sigma, tipo="call"):
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     return norm.cdf(d1) if tipo == "call" else norm.cdf(d1) - 1
 
+
 def gamma_bs(S, K, T, r, sigma):
     if T <= 0 or sigma <= 0:
         return 0
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     return norm.pdf(d1) / (S * sigma * np.sqrt(T))
+
 
 def vega_bs(S, K, T, r, sigma):
     if T <= 0 or sigma <= 0:
@@ -58,115 +486,155 @@ def vega_bs(S, K, T, r, sigma):
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     return S * norm.pdf(d1) * np.sqrt(T)
 
+
 # ============================================================
-# SIDEBAR — PARÂMETROS DA CARTEIRA
+# SIDEBAR
 # ============================================================
 
-st.sidebar.header("⚙️ Parâmetros da Carteira")
+# Logo / título sidebar
+st.sidebar.markdown("""
+<div style="padding: 0.8rem 0 0.6rem 0; border-bottom: 1px solid #1e2d40; margin-bottom: 0.5rem;">
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:0.6rem; color:#0ea5e9;
+                letter-spacing:0.22em; text-transform:uppercase;">Risk Engine</div>
+    <div style="font-family:'IBM Plex Sans',sans-serif; font-size:1.1rem; font-weight:700;
+                color:#e2e8f0; margin-top:2px;">VaR Calculator</div>
+</div>
+""", unsafe_allow_html=True)
 
-# Ativos de ações
-st.sidebar.subheader("📈 Ações")
+sidebar_section("▸ Carteira de Ações")
 
-tickers_input = st.sidebar.text_input(
-    "Tickers (separados por vírgula)",
-    value="PETR4.SA, VALE3.SA, ITUB4.SA"
-)
+tickers_input = st.sidebar.text_input("Tickers", value="PETR4.SA, VALE3.SA, ITUB4.SA",
+                                       help="Separados por vírgula. Ex: PETR4.SA, VALE3.SA")
 tickers = [t.strip() for t in tickers_input.split(",") if t.strip()]
 
-quantidades_input = st.sidebar.text_input(
-    "Quantidades (separadas por vírgula, mesma ordem dos tickers)",
-    value="1000, 800, 1200"
-)
+quantidades_input = st.sidebar.text_input("Quantidades", value="1000, 800, 1200",
+                                           help="Mesma ordem dos tickers, separadas por vírgula")
 try:
     quantidades_lista = [int(q.strip()) for q in quantidades_input.split(",")]
     if len(quantidades_lista) != len(tickers):
-        st.sidebar.error("Número de quantidades deve ser igual ao número de tickers.")
+        st.sidebar.error("Nº de quantidades ≠ nº de tickers")
         quantidades_lista = [1000] * len(tickers)
 except ValueError:
-    st.sidebar.error("Informe apenas números inteiros nas quantidades.")
+    st.sidebar.error("Use apenas números inteiros.")
     quantidades_lista = [1000] * len(tickers)
 
 quantidades_acoes = dict(zip(tickers, quantidades_lista))
 
-st.sidebar.subheader("📅 Período Histórico")
-data_inicio = st.sidebar.date_input(
-    "Data de início",
-    value=pd.to_datetime("2022-01-01")
-)
+sidebar_section("▸ Período & Parâmetros")
 
-st.sidebar.subheader("📐 Parâmetros de VaR")
+data_inicio = st.sidebar.date_input("Data de início", value=pd.to_datetime("2022-01-01"))
+
 nivel_confianca = st.sidebar.selectbox(
     "Nível de confiança",
     options=[0.90, 0.95, 0.975, 0.99],
     index=1,
     format_func=lambda x: f"{x*100:.1f}%"
 )
-horizonte_dias = st.sidebar.number_input(
-    "Horizonte (dias)",
-    min_value=1, max_value=30, value=1
-)
 
-st.sidebar.subheader("📋 Opção Europeia")
-ativo_opcao = st.sidebar.selectbox("Ativo objeto da opção", options=tickers)
-tipo_opcao = st.sidebar.selectbox("Tipo da opção", options=["call", "put"])
-quantidade_opcoes = st.sidebar.number_input("Quantidade de opções", min_value=0, value=1000, step=100)
-strike = st.sidebar.number_input("Strike (K)", min_value=1.0, value=40.0, step=0.5)
-taxa_livre_risco = st.sidebar.number_input("Taxa livre de risco (ex: 0.105 = 10,5% a.a.)", min_value=0.0, max_value=1.0, value=0.105, step=0.005, format="%.3f")
-vencimento_anos = st.sidebar.number_input("Vencimento (em anos)", min_value=0.01, max_value=5.0, value=0.25, step=0.05, format="%.2f")
+horizonte_dias = st.sidebar.number_input("Horizonte (dias)", min_value=1, max_value=30, value=1)
+
+sidebar_section("▸ Opção Europeia")
+
+ativo_opcao      = st.sidebar.selectbox("Ativo objeto", options=tickers)
+tipo_opcao       = st.sidebar.selectbox("Tipo", options=["call", "put"])
+quantidade_opcoes = st.sidebar.number_input("Quantidade", min_value=0, value=1000, step=100)
+strike           = st.sidebar.number_input("Strike (K)", min_value=1.0, value=40.0, step=0.5)
+taxa_livre_risco = st.sidebar.number_input("Taxa livre de risco (a.a.)", min_value=0.0,
+                                            max_value=1.0, value=0.105, step=0.005, format="%.3f")
+vencimento_anos  = st.sidebar.number_input("Vencimento (anos)", min_value=0.01,
+                                            max_value=5.0, value=0.25, step=0.05, format="%.2f")
+
+st.sidebar.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+calcular = st.sidebar.button("▶  CALCULAR VaR")
+
+st.sidebar.markdown("""
+<div style="margin-top:2rem; padding-top:1rem; border-top:1px solid #1e2d40;
+            font-family:'IBM Plex Mono',monospace; font-size:0.58rem; color:#3d5470;
+            line-height:1.8;">
+    Métodos<br>
+    ├ VaR Paramétrico<br>
+    ├ VaR Histórico<br>
+    └ VaR Full Valuation<br><br>
+    Modelo de opções<br>
+    └ Black-Scholes (1973)
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================
-# BOTÃO CALCULAR
+# HEADER PRINCIPAL
 # ============================================================
 
-calcular = st.sidebar.button("🚀 Calcular VaR", use_container_width=True)
+render_header()
+
+# ============================================================
+# ESTADO INICIAL
+# ============================================================
 
 if not calcular:
-    st.info("👈 Configure os parâmetros na barra lateral e clique em **Calcular VaR** para iniciar.")
-
-    with st.expander("📖 Teoria: O que é Value at Risk?", expanded=True):
-        st.markdown("""
-        **Value at Risk (VaR)** responde à pergunta:
-
-        > *"Qual é a perda máxima esperada de uma carteira, em condições normais de mercado, para determinado nível de confiança e horizonte de tempo?"*
-
-        **Exemplo:** Um VaR diário de R$ 1.000.000 com 95% de confiança significa que em 95% dos dias a perda não ultrapassa esse valor.
-
-        ---
-        ### Métodos calculados neste aplicativo:
-
-        | Método | Descrição |
-        |--------|-----------|
-        | **VaR Paramétrico** | Assume distribuição normal dos retornos. Simples e rápido. |
-        | **VaR Histórico** | Usa a distribuição empírica dos retornos históricos. |
-        | **VaR Full Valuation** | Reprecifica toda a carteira (incluindo opções) em cada cenário histórico. |
-        """)
-
+    st.markdown("""
+    <div style="
+        background: #111827;
+        border: 1px solid #1e2d40;
+        border-radius: 10px;
+        padding: 3rem 2.5rem;
+        text-align: center;
+        margin-top: 1rem;
+    ">
+        <div style="font-size:2.5rem; margin-bottom:1rem;">📉</div>
+        <div style="
+            font-family:'IBM Plex Sans',sans-serif;
+            font-size:1.1rem; font-weight:600;
+            color:#e2e8f0; margin-bottom:0.5rem;
+        ">Configure a carteira e calcule o VaR</div>
+        <div style="
+            font-family:'IBM Plex Mono',monospace;
+            font-size:0.75rem; color:#3d5470; line-height:1.8;
+        ">
+            Selecione os ativos → defina quantidades → parametrize a opção → clique em Calcular VaR
+        </div>
+        <div style="
+            display:flex; justify-content:center; gap:2rem;
+            margin-top:2rem; flex-wrap:wrap;
+        ">
+            <div style="text-align:center;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.6rem;
+                            color:#0ea5e9; letter-spacing:0.1em;">MÉTODO 01</div>
+                <div style="font-size:0.85rem; color:#7e95b0; margin-top:4px;">VaR Paramétrico</div>
+            </div>
+            <div style="color:#1e2d40; font-size:1.2rem;">·</div>
+            <div style="text-align:center;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.6rem;
+                            color:#10b981; letter-spacing:0.1em;">MÉTODO 02</div>
+                <div style="font-size:0.85rem; color:#7e95b0; margin-top:4px;">VaR Histórico</div>
+            </div>
+            <div style="color:#1e2d40; font-size:1.2rem;">·</div>
+            <div style="text-align:center;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.6rem;
+                            color:#f59e0b; letter-spacing:0.1em;">MÉTODO 03</div>
+                <div style="font-size:0.85rem; color:#7e95b0; margin-top:4px;">Full Valuation</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 # ============================================================
-# CARREGAMENTO DE DADOS
+# DOWNLOAD DE DADOS
 # ============================================================
 
-with st.spinner("⏳ Baixando dados do Yahoo Finance..."):
+with st.spinner("Conectando ao mercado..."):
     try:
         precos = yf.download(
-            tickers,
-            start=str(data_inicio),
-            auto_adjust=True,
-            progress=False
+            tickers, start=str(data_inicio),
+            auto_adjust=True, progress=False
         )["Close"]
-
         if isinstance(precos, pd.Series):
             precos = precos.to_frame(tickers[0])
-
         precos = precos.dropna()
-
         if precos.empty:
-            st.error("Nenhum dado encontrado. Verifique os tickers e a data de início.")
+            st.error("Nenhum dado encontrado. Verifique os tickers.")
             st.stop()
-
         retornos = precos.pct_change().dropna()
-
     except Exception as e:
         st.error(f"Erro ao baixar dados: {e}")
         st.stop()
@@ -176,325 +644,422 @@ with st.spinner("⏳ Baixando dados do Yahoo Finance..."):
 # ============================================================
 
 ultimos_precos = precos.iloc[-1]
+valor_acoes    = sum(quantidades_acoes[t] * ultimos_precos[t] for t in tickers)
 
-# Valor da carteira de ações
-valor_acoes = sum(quantidades_acoes[t] * ultimos_precos[t] for t in tickers)
-
-# Opção
-S0 = ultimos_precos[ativo_opcao]
+S0        = ultimos_precos[ativo_opcao]
 vol_anual = retornos[ativo_opcao].std() * np.sqrt(252)
 
 preco_opcao_hoje = black_scholes(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao)
-valor_opcoes = quantidade_opcoes * preco_opcao_hoje
-valor_total_carteira = valor_acoes + valor_opcoes
+valor_opcoes     = quantidade_opcoes * preco_opcao_hoje
+valor_total      = valor_acoes + valor_opcoes
 
-delta_opcao  = delta_bs(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao)
-gamma_opcao  = gamma_bs(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual)
-vega_opcao   = vega_bs(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual)
+delta_op = delta_bs(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao)
+gamma_op = gamma_bs(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual)
+vega_op  = vega_bs(S0, strike, vencimento_anos, taxa_livre_risco, vol_anual)
 
-# Pesos para VaR paramétrico
-pesos = np.array([quantidades_acoes[t] * ultimos_precos[t] / valor_acoes for t in tickers])
+pesos            = np.array([quantidades_acoes[t] * ultimos_precos[t] / valor_acoes for t in tickers])
 retorno_carteira = retornos.dot(pesos)
-media_carteira = retorno_carteira.mean()
-vol_carteira   = retorno_carteira.std()
-percentil      = 1 - nivel_confianca
-z              = norm.ppf(1 - nivel_confianca)
+media_cart       = retorno_carteira.mean()
+vol_cart         = retorno_carteira.std()
+percentil        = 1 - nivel_confianca
+z                = norm.ppf(1 - nivel_confianca)
 
-# VaR Paramétrico
-var_parametrico = -(media_carteira * horizonte_dias + z * vol_carteira * np.sqrt(horizonte_dias)) * valor_acoes
+var_param   = -(media_cart * horizonte_dias + z * vol_cart * np.sqrt(horizonte_dias)) * valor_acoes
+var_hist    = -np.percentile(retorno_carteira, percentil * 100) * valor_acoes
 
-# VaR Histórico
-var_historico = -np.percentile(retorno_carteira, percentil * 100) * valor_acoes
-
-# VaR Full Valuation
 cenarios_pnl = []
 for i in range(len(retornos)):
-    choque = retornos.iloc[i]
-    novos_precos = ultimos_precos * (1 + choque)
-    novo_valor_acoes = sum(quantidades_acoes[t] * novos_precos[t] for t in tickers)
-    S_cenario = novos_precos[ativo_opcao]
-    T_cenario = max(vencimento_anos - horizonte_dias / 252, 0)
-    novo_preco_opcao = black_scholes(S_cenario, strike, T_cenario, taxa_livre_risco, vol_anual, tipo_opcao)
-    novo_valor_opcoes = quantidade_opcoes * novo_preco_opcao
-    pnl = (novo_valor_acoes + novo_valor_opcoes) - valor_total_carteira
-    cenarios_pnl.append(pnl)
+    choque         = retornos.iloc[i]
+    novos_precos   = ultimos_precos * (1 + choque)
+    novo_val_acoes = sum(quantidades_acoes[t] * novos_precos[t] for t in tickers)
+    T_cen          = max(vencimento_anos - horizonte_dias / 252, 0)
+    novo_op        = black_scholes(novos_precos[ativo_opcao], strike, T_cen,
+                                   taxa_livre_risco, vol_anual, tipo_opcao)
+    cenarios_pnl.append((novo_val_acoes + quantidade_opcoes * novo_op) - valor_total)
 
-cenarios_pnl = np.array(cenarios_pnl)
-var_full_valuation = -np.percentile(cenarios_pnl, percentil * 100)
+cenarios_pnl   = np.array(cenarios_pnl)
+var_full        = -np.percentile(cenarios_pnl, percentil * 100)
 
 # ============================================================
-# EXIBIÇÃO — ABA PRINCIPAL
+# TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Resumo", "📈 Gráficos", "🔢 Gregas da Opção", "📚 Teoria"])
+apply_chart_style()
 
-# ===== ABA 1: RESUMO =====
+tab1, tab2, tab3, tab4 = st.tabs([
+    "  Resumo  ",
+    "  Gráficos  ",
+    "  Gregas  ",
+    "  Teoria  "
+])
+
+# ──────────────────────────────────────────────
+# TAB 1 — RESUMO
+# ──────────────────────────────────────────────
 with tab1:
-    st.subheader("💼 Composição da Carteira")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Valor das Ações", f"R$ {valor_acoes:,.2f}")
-    col2.metric("Valor das Opções", f"R$ {valor_opcoes:,.2f}")
-    col3.metric("Valor Total", f"R$ {valor_total_carteira:,.2f}")
 
-    st.markdown("---")
+    # KPIs principais
+    st.markdown(section_title("Composição da Carteira", f"Posição em {len(tickers)} ativo(s) + opções {tipo_opcao.upper()}"), unsafe_allow_html=True)
 
-    # Tabela de posições de ações
-    st.subheader("📋 Posições em Ações")
-    dados_posicoes = []
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(kpi_card("Ações", f"R$ {valor_acoes:,.0f}",
+                              f"{len(tickers)} ativos", "#0ea5e9", "◈"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(kpi_card("Opções", f"R$ {valor_opcoes:,.0f}",
+                              f"{quantidade_opcoes:,} {tipo_opcao}s", "#10b981", "◈"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(kpi_card("Total", f"R$ {valor_total:,.0f}",
+                              "valor de mercado", "#f59e0b", "◈"), unsafe_allow_html=True)
+    with c4:
+        st.markdown(kpi_card("Vol. Diária", f"{vol_cart*100:.2f}%",
+                              f"anual: {vol_cart*np.sqrt(252)*100:.1f}%", "#a78bfa", "◈"), unsafe_allow_html=True)
+
+    # Tabela posições
+    st.markdown(section_title("Posições em Ações"), unsafe_allow_html=True)
+
+    dados_pos = []
     for t in tickers:
         preco = ultimos_precos[t]
-        qtd = quantidades_acoes[t]
-        valor = qtd * preco
-        peso = valor / valor_acoes
-        dados_posicoes.append({
-            "Ticker": t,
-            "Último Preço (R$)": f"{preco:.2f}",
-            "Quantidade": qtd,
-            "Valor (R$)": f"{valor:,.2f}",
-            "Peso (%)": f"{peso*100:.1f}%"
+        qtd   = quantidades_acoes[t]
+        val   = qtd * preco
+        peso  = val / valor_acoes
+        dados_pos.append({
+            "Ticker":         t,
+            "Último Preço":   f"R$ {preco:.2f}",
+            "Quantidade":     f"{qtd:,}",
+            "Valor (R$)":     f"{val:,.2f}",
+            "Peso":           f"{peso*100:.1f}%",
+            "Retorno YTD":    f"{((precos[t].iloc[-1]/precos[t].iloc[0])-1)*100:.1f}%"
         })
-    st.dataframe(pd.DataFrame(dados_posicoes), use_container_width=True, hide_index=True)
 
-    # Opção
-    st.subheader("🎯 Posição em Opção")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Ativo Objeto", ativo_opcao)
-    col2.metric("Tipo", tipo_opcao.upper())
-    col3.metric("Preço BS (R$)", f"{preco_opcao_hoje:.4f}")
-    col4.metric("Valor Total Opções (R$)", f"{valor_opcoes:,.2f}")
-
-    st.markdown("---")
-
-    # Resultados VaR
-    st.subheader("⚠️ Resultados de VaR")
-    st.markdown(f"**Nível de confiança:** {nivel_confianca*100:.1f}%  |  **Horizonte:** {horizonte_dias} dia(s)")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric(
-        "VaR Paramétrico (Ações)",
-        f"R$ {var_parametrico:,.2f}",
-        help="Calculado assumindo distribuição normal dos retornos da carteira de ações."
+    st.dataframe(
+        pd.DataFrame(dados_pos),
+        use_container_width=True,
+        hide_index=True
     )
-    col2.metric(
-        "VaR Histórico (Ações)",
-        f"R$ {var_historico:,.2f}",
-        help="Calculado usando o percentil histórico dos retornos da carteira de ações."
-    )
-    col3.metric(
-        "VaR Full Valuation (Ações + Opções)",
-        f"R$ {var_full_valuation:,.2f}",
-        help="Reprecifica toda a carteira (incluindo opções via Black-Scholes) em cada cenário histórico."
-    )
+
+    # VaR Cards
+    st.markdown(section_title("Resultados de VaR",
+        f"Nível de confiança: {nivel_confianca*100:.1f}%  ·  Horizonte: {horizonte_dias} dia(s)"), unsafe_allow_html=True)
+
+    v1, v2, v3 = st.columns(3)
+    with v1:
+        st.markdown(var_card(
+            "VaR Paramétrico · Ações",
+            f"R$ {var_param:,.0f}",
+            f"{var_param/valor_total*100:.2f}%",
+            "#0ea5e9",
+            "Distribuição normal · Rápido · Carteiras lineares"
+        ), unsafe_allow_html=True)
+    with v2:
+        st.markdown(var_card(
+            "VaR Histórico · Ações",
+            f"R$ {var_hist:,.0f}",
+            f"{var_hist/valor_total*100:.2f}%",
+            "#10b981",
+            "Distribuição empírica · Sem hipótese de normalidade"
+        ), unsafe_allow_html=True)
+    with v3:
+        st.markdown(var_card(
+            "VaR Full Valuation · Ações + Opções",
+            f"R$ {var_full:,.0f}",
+            f"{var_full/valor_total*100:.2f}%",
+            "#f59e0b",
+            "Reprecificação Black-Scholes · Captura não linearidade"
+        ), unsafe_allow_html=True)
 
     # Tabela comparativa
-    st.markdown("#### Comparação dos Métodos")
+    st.markdown(section_title("Tabela Comparativa"), unsafe_allow_html=True)
+
     df_comp = pd.DataFrame({
-        "Método": ["VaR Paramétrico — Ações", "VaR Histórico — Ações", "VaR Full Valuation — Ações + Opções"],
-        "VaR (R$)": [var_parametrico, var_historico, var_full_valuation],
-        "VaR (% do valor total)": [
-            f"{var_parametrico/valor_total_carteira*100:.2f}%",
-            f"{var_historico/valor_total_carteira*100:.2f}%",
-            f"{var_full_valuation/valor_total_carteira*100:.2f}%"
-        ]
+        "Método":        ["VaR Paramétrico — Ações", "VaR Histórico — Ações", "VaR Full Valuation — Ações + Opções"],
+        "VaR (R$)":      [f"R$ {var_param:,.2f}", f"R$ {var_hist:,.2f}", f"R$ {var_full:,.2f}"],
+        "% do Portfólio":[f"{var_param/valor_total*100:.3f}%", f"{var_hist/valor_total*100:.3f}%", f"{var_full/valor_total*100:.3f}%"],
+        "Hipótese":      ["Normalidade", "Empírica", "Full repricing"],
+        "Escopo":        ["Ações", "Ações", "Ações + Opções"],
     })
-    df_comp["VaR (R$)"] = df_comp["VaR (R$)"].apply(lambda x: f"R$ {x:,.2f}")
     st.dataframe(df_comp, use_container_width=True, hide_index=True)
 
-    # Volatilidade
-    st.markdown("---")
-    st.subheader("📉 Estatísticas de Risco")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Volatilidade Diária da Carteira", f"{vol_carteira*100:.2f}%")
-    col2.metric("Volatilidade Anual da Carteira", f"{vol_carteira*np.sqrt(252)*100:.2f}%")
-    col3.metric(f"Volatilidade Anual de {ativo_opcao}", f"{vol_anual*100:.2f}%")
+    # Opção info
+    st.markdown(section_title("Parâmetros da Opção — Black-Scholes"), unsafe_allow_html=True)
+    oc1, oc2, oc3, oc4, oc5 = st.columns(5)
+    for col, label, val in [
+        (oc1, "Ativo Objeto", ativo_opcao),
+        (oc2, "Tipo", tipo_opcao.upper()),
+        (oc3, "Preço BS", f"R$ {preco_opcao_hoje:.4f}"),
+        (oc4, "Vol. Impl.", f"{vol_anual*100:.2f}% a.a."),
+        (oc5, "Valor Total", f"R$ {valor_opcoes:,.2f}"),
+    ]:
+        with col:
+            st.markdown(kpi_card(label, val, "", "#a78bfa", ""), unsafe_allow_html=True)
 
-
-# ===== ABA 2: GRÁFICOS =====
+# ──────────────────────────────────────────────
+# TAB 2 — GRÁFICOS
+# ──────────────────────────────────────────────
 with tab2:
-    st.subheader("Distribuição Histórica dos Retornos da Carteira de Ações")
-    fig1, ax1 = plt.subplots(figsize=(10, 4))
-    ax1.hist(retorno_carteira, bins=50, color="#4C72B0", edgecolor="white", alpha=0.85)
-    ax1.axvline(
-        np.percentile(retorno_carteira, percentil * 100),
-        color="red", linestyle="--", linewidth=1.8,
-        label=f"VaR Histórico ({nivel_confianca*100:.0f}%)"
-    )
-    ax1.set_xlabel("Retorno diário")
-    ax1.set_ylabel("Frequência")
-    ax1.legend()
-    ax1.set_title("Distribuição Histórica dos Retornos — Carteira de Ações")
-    st.pyplot(fig1)
-    plt.close(fig1)
 
-    st.subheader("Distribuição de P&L — Full Valuation (Ações + Opções)")
-    fig2, ax2 = plt.subplots(figsize=(10, 4))
-    ax2.hist(cenarios_pnl, bins=50, color="#55A868", edgecolor="white", alpha=0.85)
-    ax2.axvline(
-        np.percentile(cenarios_pnl, percentil * 100),
-        color="red", linestyle="--", linewidth=1.8,
-        label=f"VaR Full Valuation ({nivel_confianca*100:.0f}%)"
-    )
-    ax2.set_xlabel("P&L da carteira (R$)")
+    CYAN   = "#0ea5e9"
+    GREEN  = "#10b981"
+    AMBER  = "#f59e0b"
+    RED    = "#ef4444"
+    PURPLE = "#a78bfa"
+    DIM    = "#1e2d40"
+
+    # ── Retornos históricos ──
+    st.markdown(section_title("Distribuição dos Retornos · Carteira de Ações"), unsafe_allow_html=True)
+
+    fig, ax = plt.subplots(figsize=(12, 3.8))
+    n, bins, patches = ax.hist(retorno_carteira, bins=60, color=CYAN, alpha=0.55, edgecolor="none")
+    ax.hist(retorno_carteira[retorno_carteira <= np.percentile(retorno_carteira, percentil*100)],
+            bins=60, color=RED, alpha=0.75, edgecolor="none", label="Zona de perda")
+    vl = np.percentile(retorno_carteira, percentil*100)
+    ax.axvline(vl, color=GREEN, linewidth=1.5, linestyle="--",
+               label=f"VaR Histórico {nivel_confianca*100:.0f}% = {vl*100:.2f}%")
+    ax.set_xlabel("Retorno Diário", labelpad=8)
+    ax.set_ylabel("Frequência")
+    ax.set_title("Distribuição Histórica de Retornos")
+    ax.legend()
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+
+    # ── P&L Full Valuation ──
+    st.markdown(section_title("P&L Distribution · Full Valuation (Ações + Opções)"), unsafe_allow_html=True)
+
+    fig2, ax2 = plt.subplots(figsize=(12, 3.8))
+    ax2.hist(cenarios_pnl, bins=60, color=AMBER, alpha=0.5, edgecolor="none")
+    ax2.hist(cenarios_pnl[cenarios_pnl <= np.percentile(cenarios_pnl, percentil*100)],
+             bins=60, color=RED, alpha=0.75, edgecolor="none", label="Cauda de perda")
+    vl2 = np.percentile(cenarios_pnl, percentil*100)
+    ax2.axvline(vl2, color=AMBER, linewidth=1.5, linestyle="--",
+                label=f"VaR Full Val. = R$ {-vl2:,.0f}")
+    ax2.set_xlabel("P&L (R$)", labelpad=8)
     ax2.set_ylabel("Frequência")
+    ax2.set_title("Distribuição de P&L — Full Valuation com Opções")
     ax2.legend()
-    ax2.set_title("Distribuição de P&L — Full Valuation")
+    fig2.tight_layout()
     st.pyplot(fig2)
     plt.close(fig2)
 
-    st.subheader("Comparação entre Métodos de VaR")
-    fig3, ax3 = plt.subplots(figsize=(8, 4))
-    metodos = ["Paramétrico\n(Ações)", "Histórico\n(Ações)", "Full Valuation\n(Ações + Opções)"]
-    valores = [var_parametrico, var_historico, var_full_valuation]
-    cores = ["#4C72B0", "#55A868", "#C44E52"]
-    bars = ax3.bar(metodos, valores, color=cores, edgecolor="white")
-    ax3.bar_label(bars, labels=[f"R$ {v:,.0f}" for v in valores], padding=4, fontsize=9)
-    ax3.set_ylabel("VaR (R$)")
-    ax3.set_title("Comparação entre Métodos de VaR")
-    st.pyplot(fig3)
-    plt.close(fig3)
+    # ── Comparação VaR ──
+    col_a, col_b = st.columns(2)
 
-    st.subheader(f"Sensibilidade do Preço da Opção ({tipo_opcao.upper()}) ao Preço do Ativo")
-    precos_sim = np.linspace(S0 * 0.7, S0 * 1.3, 200)
-    precos_op_sim = [black_scholes(s, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao) for s in precos_sim]
-    fig4, ax4 = plt.subplots(figsize=(10, 4))
-    ax4.plot(precos_sim, precos_op_sim, color="#4C72B0", linewidth=2)
-    ax4.axvline(strike, color="gray", linestyle="--", label=f"Strike = {strike}")
-    ax4.axvline(S0, color="orange", linestyle="--", label=f"Preço atual = {S0:.2f}")
-    ax4.set_xlabel("Preço do ativo objeto (R$)")
-    ax4.set_ylabel("Preço da opção (R$)")
-    ax4.set_title(f"Sensibilidade do Preço da {tipo_opcao.upper()} ao Preço do Ativo")
-    ax4.legend()
-    st.pyplot(fig4)
-    plt.close(fig4)
+    with col_a:
+        st.markdown(section_title("Comparação — Métodos de VaR"), unsafe_allow_html=True)
+        fig3, ax3 = plt.subplots(figsize=(6, 3.5))
+        metodos = ["Paramétrico\n(Ações)", "Histórico\n(Ações)", "Full Valuation\n(A+O)"]
+        valores  = [var_param, var_hist, var_full]
+        cores    = [CYAN, GREEN, AMBER]
+        bars     = ax3.bar(metodos, valores, color=cores, width=0.5,
+                           edgecolor="none", alpha=0.85)
+        for bar, v in zip(bars, valores):
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(valores)*0.01,
+                     f"R$ {v:,.0f}", ha="center", va="bottom",
+                     fontsize=7.5, color="#e2e8f0", fontweight="600")
+        ax3.set_ylabel("VaR (R$)")
+        ax3.set_title("Comparativo de VaR por Método")
+        fig3.tight_layout()
+        st.pyplot(fig3)
+        plt.close(fig3)
 
-    st.subheader("Preços Históricos dos Ativos")
-    fig5, ax5 = plt.subplots(figsize=(10, 4))
-    for t in tickers:
-        ax5.plot(precos[t] / precos[t].iloc[0], label=t)
-    ax5.set_ylabel("Retorno acumulado (base 1)")
-    ax5.set_title("Retorno Acumulado dos Ativos")
-    ax5.legend()
+    with col_b:
+        st.markdown(section_title("Retorno Acumulado dos Ativos"), unsafe_allow_html=True)
+        fig4, ax4 = plt.subplots(figsize=(6, 3.5))
+        palette = [CYAN, GREEN, AMBER, PURPLE, RED]
+        for i, t in enumerate(tickers):
+            norm_prices = precos[t] / precos[t].iloc[0]
+            ax4.plot(norm_prices.index, norm_prices.values,
+                     color=palette[i % len(palette)], linewidth=1.4, label=t, alpha=0.9)
+        ax4.axhline(1, color=DIM, linewidth=0.8, linestyle="--")
+        ax4.set_ylabel("Retorno Acumulado (base 1)")
+        ax4.set_title("Performance Relativa dos Ativos")
+        ax4.legend(loc="upper left")
+        fig4.tight_layout()
+        st.pyplot(fig4)
+        plt.close(fig4)
+
+    # ── Sensibilidade da opção ──
+    st.markdown(section_title(f"Sensibilidade · Preço da {tipo_opcao.upper()} vs. Preço do Ativo"), unsafe_allow_html=True)
+
+    fig5, axes = plt.subplots(1, 2, figsize=(12, 3.8))
+    precos_sim = np.linspace(S0 * 0.65, S0 * 1.35, 300)
+    op_sim     = [black_scholes(s, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao) for s in precos_sim]
+    delt_sim   = [delta_bs(s, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao) for s in precos_sim]
+
+    axes[0].plot(precos_sim, op_sim, color=CYAN, linewidth=2)
+    axes[0].axvline(strike, color=RED,   linewidth=1, linestyle="--", alpha=0.7, label=f"Strike K={strike}")
+    axes[0].axvline(S0,     color=AMBER, linewidth=1, linestyle="--", alpha=0.7, label=f"S₀={S0:.2f}")
+    axes[0].fill_between(precos_sim, op_sim, alpha=0.1, color=CYAN)
+    axes[0].set_xlabel("Preço do Ativo (R$)")
+    axes[0].set_ylabel("Preço da Opção (R$)")
+    axes[0].set_title(f"Preço da {tipo_opcao.upper()} — Black-Scholes")
+    axes[0].legend()
+
+    axes[1].plot(precos_sim, delt_sim, color=GREEN, linewidth=2)
+    axes[1].axvline(strike, color=RED,   linewidth=1, linestyle="--", alpha=0.7, label=f"Strike K={strike}")
+    axes[1].axvline(S0,     color=AMBER, linewidth=1, linestyle="--", alpha=0.7, label=f"S₀={S0:.2f}")
+    axes[1].axhline(0.5, color=DIM, linewidth=0.8, linestyle=":")
+    axes[1].fill_between(precos_sim, delt_sim, alpha=0.1, color=GREEN)
+    axes[1].set_xlabel("Preço do Ativo (R$)")
+    axes[1].set_ylabel("Delta")
+    axes[1].set_title(f"Delta da {tipo_opcao.upper()}")
+    axes[1].legend()
+
+    fig5.tight_layout(pad=2)
     st.pyplot(fig5)
     plt.close(fig5)
 
-
-# ===== ABA 3: GREGAS =====
+# ──────────────────────────────────────────────
+# TAB 3 — GREGAS
+# ──────────────────────────────────────────────
 with tab3:
-    st.subheader(f"📐 Gregas da {tipo_opcao.upper()} — {ativo_opcao}")
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Delta (Δ)", f"{delta_opcao:.4f}", help="Sensibilidade do preço da opção ao preço do ativo objeto.")
-    col2.metric("Gamma (Γ)", f"{gamma_opcao:.6f}", help="Sensibilidade do Delta ao preço do ativo objeto.")
-    col3.metric("Vega (ν)", f"{vega_opcao:.4f}", help="Sensibilidade do preço da opção à volatilidade (por 1% de vol).")
+    st.markdown(section_title(
+        f"Gregas da Opção — {tipo_opcao.upper()} {ativo_opcao}",
+        f"S₀={S0:.2f}  K={strike}  T={vencimento_anos}a  r={taxa_livre_risco*100:.1f}%  σ={vol_anual*100:.1f}%"
+    ), unsafe_allow_html=True)
 
-    st.markdown("---")
+    g1, g2, g3 = st.columns(3)
+    with g1:
+        st.markdown(kpi_card("Delta (Δ)", f"{delta_op:.4f}",
+                              "Exposição direcional ao ativo", "#0ea5e9", "Δ"), unsafe_allow_html=True)
+    with g2:
+        st.markdown(kpi_card("Gamma (Γ)", f"{gamma_op:.6f}",
+                              "Convexidade — variação do delta", "#10b981", "Γ"), unsafe_allow_html=True)
+    with g3:
+        st.markdown(kpi_card("Vega (ν)", f"{vega_op:.4f}",
+                              "Sensibilidade à volatilidade", "#f59e0b", "ν"), unsafe_allow_html=True)
+
     st.markdown("""
-    **Interpretação das Gregas:**
+    <div style="
+        background:#0d1420; border:1px solid #1e2d40; border-radius:8px;
+        padding:1.2rem 1.5rem; margin:1rem 0; font-family:'IBM Plex Mono',monospace;
+        font-size:0.72rem; color:#7e95b0; line-height:2;
+    ">
+        <span style="color:#0ea5e9;">Δ Delta</span> — variação de ~R$Δ no preço da opção para cada R$1 no ativo&nbsp;&nbsp;·&nbsp;&nbsp;
+        <span style="color:#10b981;">Γ Gamma</span> — convexidade: quanto o Delta muda a cada R$1 no ativo&nbsp;&nbsp;·&nbsp;&nbsp;
+        <span style="color:#f59e0b;">ν Vega</span> — impacto de +1% de volatilidade sobre o preço da opção
+    </div>
+    """, unsafe_allow_html=True)
 
-    - **Delta (Δ):** Para uma variação de R$ 1 no preço do ativo, o preço da opção varia aproximadamente Δ reais.
-    - **Gamma (Γ):** Mede a convexidade. Quanto maior o Gamma, mais a opção se comporta de forma não linear.
-    - **Vega (ν):** Para um aumento de 1 ponto percentual na volatilidade, o preço da opção varia Vega reais.
-    """)
+    # Tabela de sensibilidade
+    st.markdown(section_title("Tabela de Sensibilidade — Variação ±20% no Preço do Ativo"), unsafe_allow_html=True)
 
-    # Tabela de cenários de delta
-    st.subheader("Análise de Delta em diferentes preços do ativo")
-    precos_range = np.linspace(S0 * 0.80, S0 * 1.20, 9)
-    tabela_delta = []
+    precos_range = np.linspace(S0 * 0.80, S0 * 1.20, 11)
+    tabela_grega = []
     for s in precos_range:
         d = delta_bs(s, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao)
         g = gamma_bs(s, strike, vencimento_anos, taxa_livre_risco, vol_anual)
         p = black_scholes(s, strike, vencimento_anos, taxa_livre_risco, vol_anual, tipo_opcao)
-        tabela_delta.append({
-            "Preço do Ativo (R$)": f"{s:.2f}",
-            "Preço da Opção (R$)": f"{p:.4f}",
-            "Delta": f"{d:.4f}",
-            "Gamma": f"{g:.6f}"
+        var_s = pct = (s - S0) / S0 * 100
+        tabela_grega.append({
+            "Preço Ativo (R$)":  f"{s:.2f}",
+            "Δ Preço (%)":       f"{var_s:+.1f}%",
+            "Preço Opção (R$)":  f"{p:.4f}",
+            "Delta (Δ)":         f"{d:.4f}",
+            "Gamma (Γ)":         f"{g:.6f}",
+            "Valor Posição (R$)": f"{quantidade_opcoes * p:,.2f}"
         })
-    st.dataframe(pd.DataFrame(tabela_delta), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(tabela_grega), use_container_width=True, hide_index=True)
 
-
-# ===== ABA 4: TEORIA =====
+# ──────────────────────────────────────────────
+# TAB 4 — TEORIA
+# ──────────────────────────────────────────────
 with tab4:
-    st.subheader("📚 Teoria e Interpretação")
 
-    with st.expander("🔵 VaR Paramétrico", expanded=False):
-        st.markdown("""
-        O VaR Paramétrico assume que os retornos seguem **distribuição normal**.
+    st.markdown(section_title("Fundamentos Teóricos"), unsafe_allow_html=True)
 
-        **Fórmula:**
-        ```
-        VaR = Z × σ × V
-        ```
-        onde:
-        - `Z` = quantil da distribuição normal
-        - `σ` = volatilidade da carteira
-        - `V` = valor da carteira
+    teorias = [
+        ("📐  VaR Paramétrico", "#0ea5e9", """
+Assume que os retornos da carteira seguem **distribuição normal**.
 
-        **Vantagens:** Simples, rápido, fácil de comunicar.
+**Fórmula:**
+```
+VaR = Z × σ × V × √h
+```
+onde `Z` = quantil normal, `σ` = volatilidade, `V` = valor, `h` = horizonte.
 
-        **Limitações:** Assume normalidade; pode subestimar caudas gordas; não captura bem opções.
-        """)
+**Vantagens:** simples, rápido, fácil de comunicar.
+**Limitações:** assume normalidade; não captura caudas gordas; inadequado para opções.
+        """),
+        ("📊  VaR Histórico", "#10b981", """
+Usa diretamente os **retornos históricos observados** — sem hipótese distribucional.
 
-    with st.expander("🟢 VaR Histórico", expanded=False):
-        st.markdown("""
-        O VaR Histórico usa diretamente os **retornos históricos observados**, sem supor distribuição.
+**Passos:**
+1. Calcular retorno histórico da carteira
+2. Ordenar retornos do pior ao melhor
+3. Selecionar o percentil correspondente ao nível de confiança
 
-        **Passos:**
-        1. Calcular o retorno histórico da carteira.
-        2. Ordenar os retornos.
-        3. Escolher o percentil do nível de confiança.
+**Vantagens:** não exige normalidade; usa dados reais; intuitivo.
+**Limitações:** depende da janela; assume que o passado representa o futuro.
+        """),
+        ("⚡  VaR Full Valuation", "#f59e0b", """
+**Reprecifica toda a carteira** (incluindo opções via Black-Scholes) em cada cenário histórico.
 
-        **Vantagens:** Não exige normalidade; usa dados reais.
+Por que é necessário para opções?
+- Call: `max(S − K, 0)` — payoff não linear
+- Put: `max(K − S, 0)` — payoff não linear
 
-        **Limitações:** Depende da janela histórica; assume que o passado representa o futuro.
-        """)
+O Full Valuation captura a convexidade que o VaR Paramétrico ignora.
 
-    with st.expander("🔴 VaR Full Valuation", expanded=False):
-        st.markdown("""
-        O VaR Full Valuation **reprecifica toda a carteira** (incluindo opções via Black-Scholes) em cada cenário histórico.
+**Vantagens:** capta não linearidade; mais preciso para derivativos.
+**Limitações:** computacionalmente mais custoso; sensível à janela histórica.
+        """),
+        ("⚖️  Black-Scholes (1973)", "#a78bfa", """
+**Call europeia:**
+```
+C = S·N(d₁) − K·e^{−rT}·N(d₂)
+```
+**Put europeia:**
+```
+P = K·e^{−rT}·N(−d₂) − S·N(−d₁)
+```
+```
+d₁ = [ln(S/K) + (r + σ²/2)·T] / (σ·√T)
+d₂ = d₁ − σ·√T
+```
+Hipóteses: sem arbitragem, volatilidade constante, taxa constante, retornos lognormais.
+        """),
+        ("⚠️  Limitações do VaR", "#ef4444", """
+1. **Não informa a magnitude da perda além do VaR** (cauda cega)
+2. **Depende criticamente da janela histórica** — crises ausentes → VaR subestimado
+3. **Caudas gordas** — mercados têm assimetria e excesso de curtose
+4. **Não substitui stress test** — use junto com Expected Shortfall e análise de cenários
+5. **Correlações instáveis** — em crises, correlações se aproximam de 1
 
-        **Por que usar?**
+Na prática, bancos usam VaR com Expected Shortfall, stress test e limites de perda.
+        """),
+    ]
 
-        Opções têm payoff não linear:
-        - Call: `max(S - K, 0)`
-        - Put: `max(K - S, 0)`
-
-        O Full Valuation captura essa convexidade, sendo o método mais adequado para carteiras com derivativos.
-
-        **Vantagens:** Captura não linearidade; mais preciso para opções.
-
-        **Limitações:** Mais custoso computacionalmente; ainda limitado pela janela histórica.
-        """)
-
-    with st.expander("🟡 Black-Scholes", expanded=False):
-        st.markdown(r"""
-        **Fórmula para Call europeia:**
-        ```
-        C = S·N(d1) - K·e^{-rT}·N(d2)
-        ```
-        **Para Put europeia:**
-        ```
-        P = K·e^{-rT}·N(-d2) - S·N(-d1)
-        ```
-        **Onde:**
-        ```
-        d1 = [ln(S/K) + (r + σ²/2)·T] / (σ·√T)
-        d2 = d1 - σ·√T
-        ```
-        **Hipóteses:** sem arbitragem, volatilidade constante, taxa constante, retornos lognormais.
-        """)
-
-    with st.expander("⚠️ Limitações do VaR", expanded=False):
-        st.markdown("""
-        1. **Não informa a magnitude da perda além do VaR.**
-        2. **Depende da janela histórica usada.**
-        3. **Pode subestimar eventos extremos** (caudas gordas do mercado).
-        4. **Pode falhar em carteiras com opções** se não usar Full Valuation.
-        5. **Não substitui stress test.** Na prática, usa-se VaR junto com Expected Shortfall, limites de perda e análise de cenários macroeconômicos.
-        """)
+    for titulo, cor, texto in teorias:
+        with st.expander(titulo):
+            st.markdown(f"""
+            <div style="border-left:3px solid {cor}; padding-left:1rem; margin-bottom:0.5rem;">
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown(texto)
 
 # ============================================================
 # RODAPÉ
 # ============================================================
-st.markdown("---")
-st.caption("Calculadora de VaR — Trabalho Final de Modelagem Aplicada ao Mercado Financeiro | Desenvolvido com Streamlit")
+
+st.markdown("""
+<div style="
+    margin-top: 3rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid #1e2d40;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+">
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:0.62rem; color:#3d5470;">
+        VaR Dashboard · Modelagem Aplicada ao Mercado Financeiro
+    </div>
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:0.62rem; color:#3d5470;">
+        Black-Scholes · Paramétrico · Histórico · Full Valuation
+    </div>
+</div>
+""", unsafe_allow_html=True)
