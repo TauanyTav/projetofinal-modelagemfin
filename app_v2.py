@@ -134,7 +134,10 @@ def baixar(tickers_str, ini):
     tickers = [t.strip() for t in tickers_str.split(",") if t.strip()]
     try:
         df = yf.download(tickers, start=ini, auto_adjust=True, progress=False, threads=False)
-        prices = df["Close"] if "Close" in df.columns else df
+        if isinstance(df.columns, pd.MultiIndex):
+    prices = df["Close"]
+else:
+    prices = df
         if isinstance(prices, pd.Series): prices = prices.to_frame(tickers[0])
         prices = prices.dropna(how="all")
         if not prices.empty: return prices, None
@@ -166,7 +169,10 @@ def chart_style():
 st.sidebar.markdown(f'<h2 style="color:{PRIMARY}; font-weight:700; margin-bottom:0">⚡ Risk Lab</h2><p style="color:{MUTED}; font-size:0.8rem; margin-top:0">VaR · Black-Scholes · Stress</p><hr style="border-color:{BORDER}">', unsafe_allow_html=True)
 
 st.sidebar.markdown(f'<p style="color:{PRIMARY}; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em">▸ Carteira</p>', unsafe_allow_html=True)
-tickers_str = st.sidebar.text_input("Tickers", "PETR4.SA, VALE3.SA, ITUB4.SA")
+tickers_str = st.sidebar.text_input(
+    "Tickers",
+    "PETR4.SA,VALE3.SA,ITUB4.SA"
+)
 qty_str = st.sidebar.text_input("Quantidades", "1000, 800, 1200")
 data_ini = st.sidebar.date_input("Data início", pd.to_datetime("2022-01-01"))
 
@@ -219,8 +225,29 @@ try:
 except ValueError:
     qtds = [1000] * len(tickers)
 quantidades = dict(zip(tickers, qtds))
-precos = precos[tickers].dropna()
+precos = precos[tickers].dropna(how="all")
+
+# Remove colunas totalmente vazias
+precos = precos.dropna(axis=1, how="all")
+
+# Verifica se existem dados válidos
+if precos.empty:
+    st.error("""
+    Não foi possível obter dados válidos dos ativos selecionados.
+
+    Possíveis causas:
+    - ticker incorreto
+    - indisponibilidade do Yahoo Finance
+    - período sem dados
+    """)
+    st.stop()
+
 retornos = precos.pct_change().dropna()
+
+# Segurança extra
+if len(precos) == 0:
+    st.error("Sem dados suficientes para cálculo.")
+    st.stop()
 
 ultimos = precos.iloc[-1]
 v_acoes = sum(quantidades[t] * float(ultimos[t]) for t in tickers)
