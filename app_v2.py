@@ -20,14 +20,14 @@ st.set_page_config(page_title="Risk Lab — VaR", page_icon="📉", layout="wide
 
 PRIMARY = "#22d3ee"
 SUCCESS = "#34d399"
-AMBER   = "#fbbf24"
-DANGER  = "#f87171"
-VIOLET  = "#a78bfa"
-BG      = "#0b1220"
-CARD    = "#111a2e"
-BORDER  = "#1f2a44"
-TEXT    = "#e5e7eb"
-MUTED   = "#94a3b8"
+AMBER = "#fbbf24"
+DANGER = "#f87171"
+VIOLET = "#a78bfa"
+BG = "#0b1220"
+CARD = "#111a2e"
+BORDER = "#1f2a44"
+TEXT = "#e5e7eb"
+MUTED = "#94a3b8"
 
 st.markdown(f"""
 <style>
@@ -134,20 +134,23 @@ def baixar(tickers_str, ini):
     tickers = [t.strip() for t in tickers_str.split(",") if t.strip()]
     try:
         df = yf.download(tickers, start=ini, auto_adjust=True, progress=False, threads=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        prices = df["Close"]
-    else:
-    prices = df
+        if isinstance(df.columns, pd.MultiIndex):
+            prices = df["Close"]
+        else:
+            prices = df
         if isinstance(prices, pd.Series): prices = prices.to_frame(tickers[0])
         prices = prices.dropna(how="all")
         if not prices.empty: return prices, None
-    except Exception as e: pass
+    except Exception as e:
+        pass
+        
     frames = {}
     for t in tickers:
         try:
             h = yf.Ticker(t).history(start=ini, auto_adjust=True)
             if not h.empty: frames[t] = h["Close"]
-        except: pass
+        except: 
+            pass
     if frames:
         df = pd.DataFrame(frames).dropna(how="all")
         if not df.empty: return df, None
@@ -226,25 +229,17 @@ except ValueError:
     qtds = [1000] * len(tickers)
 quantidades = dict(zip(tickers, qtds))
 precos = precos[tickers].dropna(how="all")
-
-# Remove colunas totalmente vazias
 precos = precos.dropna(axis=1, how="all")
 
-# Verifica se existem dados válidos
 if precos.empty:
     st.error("""
     Não foi possível obter dados válidos dos ativos selecionados.
-
-    Possíveis causas:
-    - ticker incorreto
-    - indisponibilidade do Yahoo Finance
-    - período sem dados
+    Possíveis causas: Ticker incorreto, indisponibilidade do Yahoo Finance ou período sem dados.
     """)
     st.stop()
 
 retornos = precos.pct_change().dropna()
 
-# Segurança extra
 if len(precos) == 0:
     st.error("Sem dados suficientes para cálculo.")
     st.stop()
@@ -260,9 +255,11 @@ v_total = v_acoes + v_op
 pesos = np.array([quantidades[t] * float(ultimos[t]) / v_acoes for t in tickers])
 ret_cart = retornos[tickers].dot(pesos)
 mu, sig = float(ret_cart.mean()), float(ret_cart.std())
-z = norm.ppf(1 - nivel)
+
+# Estatísticas de cauda bicaudais/unidirecionais ajustadas para perda positiva
+z = norm.ppf(nivel)
 pct = 1 - nivel
-var_param = -(mu * horizonte + z * sig * np.sqrt(horizonte)) * v_acoes
+var_param = (z * sig * np.sqrt(horizonte) - mu * horizonte) * v_acoes
 var_hist = -float(np.percentile(ret_cart, pct * 100)) * v_acoes
 
 # Full Valuation
@@ -277,9 +274,9 @@ for i in range(len(retornos)):
 pnl = np.array(pnl)
 var_full = -float(np.percentile(pnl, pct * 100))
 
-# Expected Shortfall (NOVO)
-es_param = -float(ret_cart[ret_cart <= np.percentile(ret_cart, pct * 100)].mean()) * v_acoes
-es_hist = es_param  # mesmo cálculo empírico
+# Expected Shortfall (Correção da Fórmula Analítica Paramétrica)
+es_param = (sig * np.sqrt(horizonte) * (norm.pdf(z) / (1 - nivel)) - mu * horizonte) * v_acoes
+es_hist = -float(ret_cart[ret_cart <= np.percentile(ret_cart, pct * 100)].mean()) * v_acoes
 
 delta_v, gamma_v, vega_v = greeks(S0, strike, T_exp, rf, sig_an, opt_tipo)
 
@@ -340,7 +337,7 @@ with tab3:
             sub = retornos.tail(252)
         if len(sub) < 30: continue
         rp = sub[tickers].dot(pesos)
-        vp = -(rp.mean() + norm.ppf(1-nivel) * rp.std()) * v_acoes
+        vp = (norm.ppf(nivel) * rp.std() - rp.mean()) * v_acoes
         vh = -np.percentile(rp, (1-nivel)*100) * v_acoes
         rows.append({"Janela": nome, "Obs": len(sub), "VaR Paramétrico": f"R$ {vp:,.0f}", "VaR Histórico": f"R$ {vh:,.0f}", "Vol diária": f"{rp.std()*100:.2f}%"})
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
