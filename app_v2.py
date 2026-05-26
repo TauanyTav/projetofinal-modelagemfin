@@ -134,9 +134,9 @@ def baixar(tickers_str, ini):
     tickers = [t.strip() for t in tickers_str.split(",") if t.strip()]
     try:
         df = yf.download(tickers, start=ini, auto_adjust=True, progress=False, threads=False)
-        if isinstance(df.columns, pd.MultiIndex):
-    prices = df["Close"]
-else:
+    if isinstance(df.columns, pd.MultiIndex):
+        prices = df["Close"]
+    else:
     prices = df
         if isinstance(prices, pd.Series): prices = prices.to_frame(tickers[0])
         prices = prices.dropna(how="all")
