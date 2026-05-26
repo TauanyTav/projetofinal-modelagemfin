@@ -41,8 +41,18 @@ html, body, .stApp {
     color: #f8fafc !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
-.main .block-container { padding: 1.5rem 2.5rem 3rem; max-width: 1600px; }
-section[data-testid="stSidebar"] { background: #0f172a !important; border-right: 1px solid #1e293b !important; }
+
+.main .block-container {
+    padding: 1.5rem 2.5rem 3rem;
+    max-width: 1600px;
+}
+
+section[data-testid="stSidebar"] {
+    background: #0f172a !important;
+    border-right: 1px solid #1e293b !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 /* Inputs Customizados */
 .stTextInput input, .stNumberInput input, .stDateInput input, [data-baseweb="select"] > div {
