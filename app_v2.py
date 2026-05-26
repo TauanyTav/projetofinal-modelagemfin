@@ -30,7 +30,7 @@ TEXT    = "#f8fafc"
 MUTED   = "#64748b"
 
 # Injeção de CSS Seguro e Avançado
-st.markdown("""
+st.markdown(""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
